@@ -5,4 +5,4 @@ def load_data():
     ratings = pd.read_csv("datasets/ratings.csv")
     links = pd.read_csv("datasets/links.csv")
     tags = pd.read_csv("datasets/tags.csv")
-    return movies, ratings
+    return movies, ratings, tags
