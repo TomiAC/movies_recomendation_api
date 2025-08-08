@@ -1,7 +1,7 @@
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-def get_user_recommendations(user_id, user_item_matrix, movies, top_n=5):
+def get_user_recommendations(user_id, user_item_matrix, movies, top_n=10):
     # Similitud entre usuarios
     user_sim = cosine_similarity(user_item_matrix)
     user_idx = user_item_matrix.index.get_loc(user_id)
