@@ -4,3 +4,4 @@ SQLAlchemy
 pandas
 python-dotenv
 scikit-learn
+joblib 
