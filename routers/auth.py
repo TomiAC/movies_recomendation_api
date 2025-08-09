@@ -1,9 +1,13 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
+import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
@@ -14,12 +18,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 users_db = {}
 
+ratings = pd.read_csv('datasets/ratings.csv')
+
 class User:
-    def __init__(self, username: str, email: str, full_name: Optional[str] = None, disabled: bool = False):
+    def __init__(self, username: str, email: str, full_name: Optional[str] = None, disabled: bool = False, userId: int = None):
         self.username = username
         self.email = email
         self.full_name = full_name
         self.disabled = disabled
+        self.userId = userId
 
 def get_user(username: str):
     if username in users_db:
@@ -53,7 +60,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as e:
+        logger.error(f"Token decoding failed: {e}")
         raise credentials_exception
     user = get_user(username)
     if user is None:
@@ -64,25 +72,32 @@ router = APIRouter()
 
 @router.post("/register")
 def register(form_data: OAuth2PasswordRequestForm = Depends()):
+    logger.info(f"Registering user: {form_data.username}")
     if form_data.username in users_db:
+        logger.warning(f"Username {form_data.username} already exists.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already registered"
         )
     hashed_password = get_password_hash(form_data.password)
+    new_user_id = ratings['userId'].max() + 1
     users_db[form_data.username] = {
         "username": form_data.username,
         "email": "",
         "full_name": "",
         "hashed_password": hashed_password,
-        "disabled": False
+        "disabled": False,
+        "userId": new_user_id
     }
+    logger.info(f"User {form_data.username} registered successfully with userId {new_user_id}.")
     return {"message": "User registered successfully"}
 
 @router.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    logger.info(f"Login attempt for user: {form_data.username}")
     user = get_user(form_data.username)
-    if not user or not verify_password(form_data.password, users_db[user.username]['hashed_password']):
+    if not user or not verify_password(form_data.password, users_db[user.username].get('hashed_password')):
+        logger.warning(f"Invalid login attempt for user: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -90,6 +105,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "userId": user.userId}, expires_delta=access_token_expires
     )
+    logger.info(f"User {form_data.username} logged in successfully.")
     return {"access_token": access_token, "token_type": "bearer"}
