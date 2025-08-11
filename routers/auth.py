@@ -5,7 +5,9 @@ import jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
-import pandas as pd
+from sqlalchemy.orm import Session
+from src.database import get_db
+from src.models import User, Token
 
 logger = logging.getLogger(__name__)
 
@@ -15,23 +17,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-users_db = {}
-
-ratings = pd.read_csv('datasets/ratings.csv')
-
-class User:
-    def __init__(self, username: str, email: str, full_name: Optional[str] = None, disabled: bool = False, userId: int = None):
-        self.username = username
-        self.email = email
-        self.full_name = full_name
-        self.disabled = disabled
-        self.userId = userId
-
-def get_user(username: str):
-    if username in users_db:
-        user_dict = users_db[username]
-        return User(**user_dict)
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -49,7 +34,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -63,7 +48,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except jwt.PyJWTError as e:
         logger.error(f"Token decoding failed: {e}")
         raise credentials_exception
-    user = get_user(username)
+    user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
     return user
@@ -71,32 +56,28 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 router = APIRouter()
 
 @router.post("/register")
-def register(form_data: OAuth2PasswordRequestForm = Depends()):
+def register(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     logger.info(f"Registering user: {form_data.username}")
-    if form_data.username in users_db:
+    db_user = db.query(User).filter(User.username == form_data.username).first()
+    if db_user:
         logger.warning(f"Username {form_data.username} already exists.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already registered"
         )
     hashed_password = get_password_hash(form_data.password)
-    new_user_id = ratings['userId'].max() + 1
-    users_db[form_data.username] = {
-        "username": form_data.username,
-        "email": "",
-        "full_name": "",
-        "hashed_password": hashed_password,
-        "disabled": False,
-        "userId": new_user_id
-    }
-    logger.info(f"User {form_data.username} registered successfully with userId {new_user_id}.")
+    new_user = User(username=form_data.username, hashed_password=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    logger.info(f"User {form_data.username} registered successfully.")
     return {"message": "User registered successfully"}
 
 @router.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     logger.info(f"Login attempt for user: {form_data.username}")
-    user = get_user(form_data.username)
-    if not user or not verify_password(form_data.password, users_db[user.username].get('hashed_password')):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
         logger.warning(f"Invalid login attempt for user: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -105,7 +86,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "userId": user.userId}, expires_delta=access_token_expires
+        data={"sub": user.username}, expires_delta=access_token_expires
     )
+    token = Token(access_token=access_token, token_type="bearer", user_id=user.id)
+    db.add(token)
+    db.commit()
     logger.info(f"User {form_data.username} logged in successfully.")
     return {"access_token": access_token, "token_type": "bearer"}

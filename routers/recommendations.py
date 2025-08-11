@@ -9,7 +9,7 @@ from src.popularity import get_popular_movies
 from src.content import get_similar_movies
 from src.hybrid import get_hybrid_recommendations
 from .auth import get_current_user, User
-from src.database import SessionLocal
+from src.database import get_db
 from src.utils import get_data_from_db
 from src.models import Rating as RatingModel
 from datetime import datetime
@@ -29,19 +29,12 @@ class RatingCreate(BaseModel):
     movie_id: int
     rating: float
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @router.post("/rate")
 def rate_movie(rating: RatingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logger.info(f"Rating submission request for movie_id: {rating.movie_id} by user_id: {current_user.userId}")
+    logger.info(f"Rating submission request for movie_id: {rating.movie_id} by user_id: {current_user.id}")
     
     db_rating = RatingModel(
-        user_id=current_user.userId,
+        user_id=current_user.id,
         movie_id=rating.movie_id,
         rating=rating.rating,
         timestamp=int(datetime.now().timestamp())
@@ -51,7 +44,7 @@ def rate_movie(rating: RatingCreate, db: Session = Depends(get_db), current_user
     db.commit()
     db.refresh(db_rating)
     
-    logger.info(f"Rating of {rating.rating} for movie {rating.movie_id} by user {current_user.userId} saved.")
+    logger.info(f"Rating of {rating.rating} for movie {rating.movie_id} by user {current_user.id} saved.")
     
     return {"message": "Rating submitted successfully"}
 
@@ -68,7 +61,7 @@ def recommend_by_content(movie_id: int, top_n: int = 10, current_user: User = De
 
 @router.get("/recommend/hybrid")
 def recommend_hybrid(top_n: int = 10, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    user_id = current_user.userId
+    user_id = current_user.id
     logger.info(f"Hybrid recommendation request for user_id: {user_id}, top_n: {top_n}")
     
     movies, ratings, _ = get_data_from_db(db)
@@ -83,7 +76,7 @@ def recommend_hybrid(top_n: int = 10, current_user: User = Depends(get_current_u
 
 @router.get("/recommend")
 def recommend(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    user_id = current_user.userId
+    user_id = current_user.id
     logger.info(f"Collaborative filtering recommendation request for user_id: {user_id}")
     
     movies, _, _ = get_data_from_db(db)

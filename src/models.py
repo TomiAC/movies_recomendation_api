@@ -16,9 +16,19 @@ class Movie(Base):
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
     
     ratings = relationship("Rating", back_populates="user")
     tags = relationship("Tag", back_populates="user")
+
+class Token(Base):
+    __tablename__ = 'tokens'
+    id = Column(Integer, primary_key=True, index=True)
+    access_token = Column(String, unique=True, index=True)
+    token_type = Column(String)
+    user_id = Column(Integer, ForeignKey('users.id'))
+
 
 class Rating(Base):
     __tablename__ = 'ratings'

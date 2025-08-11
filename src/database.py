@@ -15,3 +15,10 @@ Base = declarative_base()
 def create_db_and_tables():
     from src.models import Base # import Base from your models
     Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
