@@ -2,6 +2,7 @@ import logging
 import os
 import joblib
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from src.colaborative import get_user_recommendations
 from src.popularity import get_popular_movies
@@ -10,6 +11,8 @@ from src.hybrid import get_hybrid_recommendations
 from .auth import get_current_user, User
 from src.database import SessionLocal
 from src.utils import get_data_from_db
+from src.models import Rating as RatingModel
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +25,35 @@ tfidf_matrix = joblib.load(os.path.join(DATA_PATH, "tfidf_matrix.joblib"))
 movie_indices = joblib.load(os.path.join(DATA_PATH, "movie_indices.joblib"))
 movies_df_content = joblib.load(os.path.join(DATA_PATH, "movies_df_content.joblib"))
 
+class RatingCreate(BaseModel):
+    movie_id: int
+    rating: float
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+@router.post("/rate")
+def rate_movie(rating: RatingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logger.info(f"Rating submission request for movie_id: {rating.movie_id} by user_id: {current_user.userId}")
+    
+    db_rating = RatingModel(
+        user_id=current_user.userId,
+        movie_id=rating.movie_id,
+        rating=rating.rating,
+        timestamp=int(datetime.now().timestamp())
+    )
+    
+    db.add(db_rating)
+    db.commit()
+    db.refresh(db_rating)
+    
+    logger.info(f"Rating of {rating.rating} for movie {rating.movie_id} by user {current_user.userId} saved.")
+    
+    return {"message": "Rating submitted successfully"}
 
 @router.get("/recommend/content/{movie_id}")
 def recommend_by_content(movie_id: int, top_n: int = 10, current_user: User = Depends(get_current_user)):
@@ -70,8 +96,8 @@ def recommend(current_user: User = Depends(get_current_user), db: Session = Depe
     logger.info(f"Collaborative filtering recommendations generated for user_id: {user_id}")
     return recs.to_dict(orient='records')
 
-@router.get("/populares")
-def populares(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/populars")
+def populars(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     logger.info("Popular movies request")
     movies, ratings, _ = get_data_from_db(db)
     recs = get_popular_movies(movies, ratings, top_n=10)
