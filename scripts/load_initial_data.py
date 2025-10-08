@@ -6,8 +6,9 @@ import os
 # Add project root to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.database import SessionLocal, engine
+from src.database import SessionLocal, engine, create_db_and_tables
 from src.models import Base, Movie, User, Rating, Tag
+from routers.auth import get_password_hash
 
 def load_data():
     db: Session = SessionLocal()
@@ -32,8 +33,13 @@ def load_data():
 
         # Get unique users from both files
         user_ids = pd.concat([ratings_df['userId'], tags_df['userId']]).unique()
+        hashed_password = get_password_hash("password")
         for user_id in user_ids:
-            user = User(id=int(user_id))
+            user = User(
+                id=int(user_id),
+                username=f"user{user_id}",
+                hashed_password=hashed_password
+            )
             db.add(user)
         db.commit()
         print(f"{len(user_ids)} users loaded.")
@@ -71,4 +77,7 @@ def load_data():
         db.close()
 
 if __name__ == "__main__":
+    print("Creating database and tables...")
+    create_db_and_tables()
+    print("Database and tables created.")
     load_data()

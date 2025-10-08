@@ -16,8 +16,8 @@ class Movie(Base):
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    username = Column(String, unique=True, index=True, nullable=True)
+    hashed_password = Column(String, nullable=True)
     
     ratings = relationship("Rating", back_populates="user")
     tags = relationship("Tag", back_populates="user")

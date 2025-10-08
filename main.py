@@ -20,12 +20,6 @@ logger = logging.getLogger(__name__)
 # Create database and tables on startup
 app = FastAPI()
 
-@app.on_event("startup")
-def on_startup():
-    logger.info("Creating database and tables if they don't exist...")
-    create_db_and_tables()
-    logger.info("Database and tables are ready.")
-
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"Request: {request.method} {request.url}")
