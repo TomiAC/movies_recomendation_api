@@ -44,6 +44,6 @@ def get_hybrid_recommendations(user_id, movies, ratings, matrix, movies_df_conte
         content_recs = movies_df_content[movies_df_content['movieId'].isin(recommended_movie_ids)]
 
     # 3. Combinar y eliminar duplicados (dando prioridad a las colaborativas)
-    hybrid_recs = pd.concat([content_recs, collab_recs]).drop_duplicates(subset='movieId').head(top_n)
+    hybrid_recs = pd.concat([collab_recs, content_recs]).drop_duplicates(subset='movieId').head(top_n)
     
     return hybrid_recs
