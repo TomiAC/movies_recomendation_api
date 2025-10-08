@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from routers.auth import router as auth_router
 from routers.recommendations import router as recommendations_router
+from routers.movies import router as movies_router
 from src.database import create_db_and_tables
 
 # Configure logging
@@ -37,6 +38,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(recommendations_router, prefix="/recommendations", tags=["recommendations"])
+app.include_router(movies_router, prefix="", tags=["movies"])
 
 @app.get("/")
 def home():
