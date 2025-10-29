@@ -1,6 +1,10 @@
 import os
+import sys
 import pandas as pd
 import joblib
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.matrix_builder import build_user_item_matrix
 from src.content import prepare_content_based
 from src.database import SessionLocal
